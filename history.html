@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>履歴一覧</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .back-button {
+      background-color: #757575;
+      color: white;
+      padding: 6px 12px;
+      border: none;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    /* 操作ごとの色 */
+    .action-add { background-color: #2196f3; color: white; }
+    .action-stock { background-color: #4caf50; color: white; }
+    .action-consume { background-color: #f44336; color: white; }
+    .action-remove { background-color: #9e9e9e; color: white; }
+    .action-update { background-color: #fbc02d; color: black; }
+  </style>
+</head>
+<body>
+
+<h1 id="historyTitle">履歴一覧</h1>
+<button class="back-button" id="backBtn">← 在庫管理へ戻る</button>
+
+<table>
+  <thead>
+    <tr>
+      <th>日時</th>
+      <th>操作</th>
+      <th>商品名</th>
+      <th>数量</th>
+    </tr>
+  </thead>
+  <tbody id="historyBody"></tbody>
+</table>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const clubName = urlParams.get("club") || "default";
+  const HISTORY_KEY = `history_${clubName}`;
+
+  const clubTitleMap = {
+    soccer: "サッカー部",
+    baseball: "野球部",
+    softball: "ソフトボール部",
+    basketball: "バスケットボール部",
+    vallyball: "バレーボール部",
+    trackandfield: "陸上部",
+    Kendo: "剣道部",
+    brassband: "吹奏楽部",
+    manufacturingdepartment: "モノづくり部"
+  };
+
+  document.getElementById("historyTitle").textContent =
+    `${clubTitleMap[clubName] || "在庫管理"} の履歴一覧`;
+
+  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  const tbody = document.getElementById("historyBody");
+
+  function getActionClass(action) {
+    switch (action) {
+      case "追加": return "action-add";
+      case "入荷": return "action-stock";
+      case "消費": return "action-consume";
+      case "削除": return "action-remove";
+      case "更新": return "action-update";
+      default: return "";
+    }
+  }
+
+  if (history.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.textContent = "履歴がありません";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  } else {
+    history.reverse().forEach(entry => {
+      const tr = document.createElement("tr");
+      const actionClass = getActionClass(entry.action);
+      tr.innerHTML = `
+        <td>${entry.timestamp}</td>
+        <td class="${actionClass}">${entry.action}</td>
+        <td>${entry.item}</td>
+        <td>${entry.amount !== null ? entry.amount : "-"}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // 戻るボタン
+  document.getElementById("backBtn").addEventListener("click", () => {
+    location.href = `inventory.html?club=${encodeURIComponent(clubName)}`;
+  });
+</script>
+
+</body>
+</html>
+
+
+
