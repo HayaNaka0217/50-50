@@ -10,7 +10,7 @@
     }
 
     h1 {
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
 
     .history-list {
@@ -36,63 +36,66 @@
       border-radius: 4px;
     }
 
-    .add {
-      background-color: #2196f3; /* 青 */
-      color: white;
-    }
-
-    .consume {
-      background-color: #e53935; /* 赤 */
-      color: white;
-    }
-
-    .delete {
-      background-color: #9e9e9e; /* グレー */
-      color: white;
-    }
-
-    .update {
-      background-color: #fbc02d; /* 黄色 */
-      color: black;
-    }
-
-    .stockin {
-      background-color: #4caf50; /* 緑（入荷） */
-      color: white;
-    }
+    .add { background-color: #2196f3; color: white; }
+    .consume { background-color: #e53935; color: white; }
+    .delete { background-color: #9e9e9e; color: white; }
+    .update { background-color: #fbc02d; color: black; }
+    .stockin { background-color: #4caf50; color: white; }
 
     .back-button {
       background-color: #757575;
       color: white;
       border: none;
       padding: 8px 12px;
-      margin-bottom: 15px;
+      margin-bottom: 20px;
       cursor: pointer;
+    }
+
+    .history-controls {
+      display: flex;
+      justify-content: flex-end;  /* 右寄せ */
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .select-toggle,
+    .delete-selected {
+      padding: 6px 12px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+
+    .select-toggle {
+      background-color: #9c27b0;
+      color: white;
     }
 
     .delete-selected {
       background-color: #e53935;
       color: white;
-      padding: 6px 12px;
-      border: none;
-      margin-top: 10px;
-      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
 <button class="back-button" onclick="history.back()">← 戻る</button>
+
 <h1 id="title">履歴</h1>
+
+<!-- ボタンを右寄せ -->
+<div class="history-controls">
+  <button class="select-toggle" onclick="toggleSelectAll()">すべて選択 / 解除</button>
+  <button class="delete-selected" onclick="deleteSelected()">選択した履歴を削除</button>
+</div>
+
 <ul class="history-list" id="historyList"></ul>
-<button class="delete-selected" onclick="deleteSelected()">選択した履歴を削除</button>
 
 <script>
   const urlParams = new URLSearchParams(location.search);
   const clubName = urlParams.get('club') || 'default';
   const HISTORY_KEY = `history_${clubName}`;
   const historyData = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-
   const historyList = document.getElementById('historyList');
 
   const actionClassMap = {
@@ -106,18 +109,24 @@
   if (historyData.length === 0) {
     historyList.innerHTML = "<li>履歴はありません。</li>";
   } else {
-    // 新しい履歴を上に（配列を逆順に）
-    historyData.slice().reverse().forEach((entry, index) => {
+    historyData.slice().reverse().forEach((entry, i) => {
+      const realIndex = historyData.length - 1 - i;
       const li = document.createElement('li');
       li.className = "history-item";
       li.innerHTML = `
-        <input type="checkbox" data-index="${historyData.length - 1 - index}" />
+        <input type="checkbox" data-index="${realIndex}" />
         <span class="timestamp">${entry.timestamp}</span>　
         <span class="action ${actionClassMap[entry.action] || ''}">${entry.action}</span>
         ${entry.item}${entry.amount != null ? `：${entry.amount}` : ""}
       `;
       historyList.appendChild(li);
     });
+  }
+
+  function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
   }
 
   function deleteSelected() {
