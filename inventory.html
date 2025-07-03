@@ -81,6 +81,13 @@
       opacity: 0.5;
       pointer-events: none;
     }
+    /* 追加メッセージ用 */
+    #message {
+      color: red;
+      margin-bottom: 10px;
+      font-weight: bold;
+      height: 1.2em;
+    }
   </style>
 </head>
 <body>
@@ -89,7 +96,6 @@
 
 <h1 id="clubTitle">在庫管理</h1>
 
-<!-- 検索ボックス -->
 <input
   type="text"
   id="searchInput"
@@ -119,13 +125,13 @@
 </table>
 
 <h2>新規追加</h2>
+<div id="message"></div>
 <input type="text" id="newName" placeholder="商品名" />
 <input type="number" id="newQty" placeholder="個数" min="0" />
 <input type="number" id="newRequiredQty" placeholder="必要個数" min="0" />
 <button class="green-button" onclick="addItem()">追加</button>
 
 <script>
-  // クエリから部活名取得
   const urlParams = new URLSearchParams(window.location.search);
   const clubName = urlParams.get("club") || "default";
   const STORAGE_KEY = `inventory_${clubName}`;
@@ -146,6 +152,7 @@
   document.getElementById("clubTitle").textContent = `${clubTitleMap[clubName] || "在庫管理"} 用 在庫管理`;
 
   let items = [];
+  let displayItems = []; // 今表示しているアイテムリスト（絞り込み用）
 
   function saveItems() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -170,7 +177,14 @@
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   }
 
-  function render(displayItems = items) {
+  // 指定された名前から元のitems配列のインデックスを取得
+  function findItemIndexByName(name) {
+    return items.findIndex(i => i.name === name);
+  }
+
+  function render(list = displayItems.length ? displayItems : items) {
+    displayItems = list; // 今表示中のアイテム一覧を更新
+
     const tbody = document.querySelector("#inventory tbody");
     tbody.innerHTML = "";
     displayItems.forEach((item, i) => {
@@ -181,18 +195,18 @@
         <td class="${shortageClass}">${item.qty}</td>
         <td>
           <input type="number" id="required_${i}" value="${item.requiredQty}" min="0" style="width:70px;" />
-          <button class="update-button" onclick="updateRequiredQty(${i})">更新</button>
+          <button class="update-button" onclick="updateRequiredQtyByName('${item.name.replace(/'/g,"\\'")}')">更新</button>
         </td>
         <td>
           <input type="number" id="in_${i}" min="0" value="0" />
-          <button class="add-button" onclick="addStock(${i})">入荷</button>
+          <button class="add-button" onclick="addStockByName('${item.name.replace(/'/g,"\\'")}')">入荷</button>
         </td>
         <td>
           <input type="number" id="out_${i}" min="0" value="0" />
-          <button class="consume-button" onclick="consumeStock(${i})">消費</button>
+          <button class="consume-button" onclick="consumeStockByName('${item.name.replace(/'/g,"\\'")}')">消費</button>
         </td>
         <td>
-          <button class="remove-button" onclick="removeItem(${i})">削除</button>
+          <button class="remove-button" onclick="removeItemByName('${item.name.replace(/'/g,"\\'")}')">削除</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -201,7 +215,6 @@
     updateShortageBtn();
   }
 
-  // 不足ボタンの無効化切り替え
   function updateShortageBtn() {
     const btn = document.getElementById("shortageBtn");
     const hasShortage = items.some(item => item.qty < item.requiredQty);
@@ -214,7 +227,67 @@
     }
   }
 
+  // 以下、名前指定バージョンの操作関数（絞り込み中でも正しくitemsを更新）
+
+  function updateRequiredQtyByName(name) {
+    const displayIndex = displayItems.findIndex(i => i.name === name);
+    if (displayIndex === -1) return;
+    const input = document.getElementById(`required_${displayIndex}`);
+    const val = parseInt(input.value);
+    if (!isNaN(val) && val >= 0) {
+      const idx = findItemIndexByName(name);
+      items[idx].requiredQty = val;
+      logHistory("更新", name, val);
+      filterItems(); // 再フィルタで表示更新
+    }
+  }
+
+  function addStockByName(name) {
+    const displayIndex = displayItems.findIndex(i => i.name === name);
+    if (displayIndex === -1) return;
+    const input = document.getElementById(`in_${displayIndex}`);
+    const val = parseInt(input.value);
+    if (!isNaN(val) && val > 0) {
+      const idx = findItemIndexByName(name);
+      items[idx].qty += val;
+      logHistory("入荷", name, val);
+      input.value = 0;
+      filterItems();
+    }
+  }
+
+  function consumeStockByName(name) {
+    const displayIndex = displayItems.findIndex(i => i.name === name);
+    if (displayIndex === -1) return;
+    const input = document.getElementById(`out_${displayIndex}`);
+    const val = parseInt(input.value);
+    if (!isNaN(val) && val > 0) {
+      const idx = findItemIndexByName(name);
+      if (items[idx].qty >= val) {
+        items[idx].qty -= val;
+        logHistory("消費", name, val);
+        input.value = 0;
+        filterItems();
+      } else {
+        alert("消費数が在庫数を超えています");
+      }
+    }
+  }
+
+  function removeItemByName(name) {
+    if (!confirm(`「${name}」を削除しますか？`)) return;
+    const idx = findItemIndexByName(name);
+    if (idx === -1) return;
+    logHistory("削除", name);
+    items.splice(idx, 1);
+    filterItems();
+  }
+
+  // 新規追加
   function addItem() {
+    const message = document.getElementById("message");
+    message.textContent = "";
+
     const nameInput = document.getElementById("newName");
     const qtyInput = document.getElementById("newQty");
     const requiredInput = document.getElementById("newRequiredQty");
@@ -227,87 +300,46 @@
       return;
     }
 
-    // 既にある商品名チェック（大文字小文字区別なし）
     const exists = items.some(item => item.name.toLowerCase() === name.toLowerCase());
     if (exists) {
-      alert("その商品名は既に存在します");
+      message.textContent = "その商品名は既に存在します";
       return;
     }
 
     items.push({ name, qty, requiredQty });
     logHistory("追加", name, qty);
-    render();
     nameInput.value = "";
     qtyInput.value = "";
     requiredInput.value = "";
-    filterItems(); // 検索状態があれば反映
+    filterItems(); // 表示を更新（検索状態を維持）
   }
 
-  function updateRequiredQty(index) {
-    const input = document.getElementById(`required_${index}`);
-    const val = parseInt(input.value);
-    if (!isNaN(val) && val >= 0) {
-      items[index].requiredQty = val;
-      logHistory("更新", items[index].name, val);
-      render();
-      filterItems();
-    }
-  }
-
-  function addStock(index) {
-    const input = document.getElementById(`in_${index}`);
-    const val = parseInt(input.value);
-    if (!isNaN(val) && val > 0) {
-      items[index].qty += val;
-      logHistory("入荷", items[index].name, val);
-      input.value = 0;
-      render();
-      filterItems();
-    }
-  }
-
-  function consumeStock(index) {
-    const input = document.getElementById(`out_${index}`);
-    const val = parseInt(input.value);
-    if (!isNaN(val) && val > 0 && items[index].qty >= val) {
-      items[index].qty -= val;
-      logHistory("消費", items[index].name, val);
-      input.value = 0;
-      render();
-      filterItems();
-    }
-  }
-
-  function removeItem(index) {
-    if (confirm(`「${items[index].name}」を削除しますか？`)) {
-      logHistory("削除", items[index].name);
-      items.splice(index, 1);
-      render();
-      filterItems();
-    }
-  }
-
-  function showShortage() {
-    const filtered = items.filter((item) => item.qty < item.requiredQty);
-    render(filtered);
-  }
-
-  function showAll() {
-    render();
-  }
-
-  // 検索機能
+  // 絞り込み用関数
   function filterItems() {
     const query = document.getElementById("searchInput").value.trim().toLowerCase();
     if (!query) {
+      displayItems = items;
       render();
       return;
     }
-    const filtered = items.filter((item) => item.name.toLowerCase().includes(query));
-    render(filtered);
+    displayItems = items.filter(item => item.name.toLowerCase().includes(query));
+    render(displayItems);
+  }
+
+  // 不足だけ表示
+  function showShortage() {
+    displayItems = items.filter(item => item.qty < item.requiredQty);
+    render(displayItems);
+  }
+
+  // 全て表示
+  function showAll() {
+    displayItems = items;
+    render();
   }
 
   loadItems();
+  displayItems = items;
   render();
 </script>
 
