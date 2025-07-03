@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>在庫管理</title>
   <style>
     body {
-      font-family: sans-serif;
-      margin: 20px;
+      font-family: Arial, sans-serif;
+      padding: 10px;
     }
     table {
       border-collapse: collapse;
@@ -20,54 +20,83 @@
       text-align: center;
     }
     input[type="number"], input[type="text"] {
-      width: 80px;
+      width: 60px;
+      padding: 4px;
+      box-sizing: border-box;
+    }
+    input[type="text"].search-box {
+      width: 200px;
+      padding: 5px;
+      margin-bottom: 10px;
     }
     button {
       margin: 2px;
-      padding: 6px 12px;
+      padding: 5px 10px;
       cursor: pointer;
+      border: none;
+      border-radius: 3px;
+      color: white;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .back-button {
+      background-color: #666;
+      color: white;
+      padding: 6px 12px;
+      margin-bottom: 15px;
+      display: inline-block;
+      text-decoration: none;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .green-button {
+      background-color: #4caf50;
+    }
+    .red-button {
+      background-color: #e53935;
+    }
+    .yellow-button {
+      background-color: #fbc02d;
+      color: black;
     }
     .shortage {
       color: red;
       font-weight: bold;
     }
-    .green-button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-    }
-    .red-button {
-      background-color: #e53935;
-      color: white;
-      border: none;
-    }
-    .yellow-button {
-      background-color: #fbc02d;
+    .update-button {
+      background-color: #fbc02d; /* 黄色 */
       color: black;
-      border: none;
     }
-    .blue-button {
-      background-color: #42a5f5;
-      color: white;
-      border: none;
+    .add-button {
+      background-color: #2196f3; /* 青 */
     }
-    .gray-button {
+    .consume-button {
+      background-color: #e53935; /* 赤 */
+    }
+    .remove-button {
       background-color: #9e9e9e;
-      color: white;
-      border: none;
     }
-    .back-button {
-      background-color: #757575;
-      color: white;
-      border: none;
-      margin-bottom: 10px;
+    .disabled {
+      opacity: 0.5;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
 
 <button class="back-button" onclick="location.href='index.html'">← 部活選択に戻る</button>
+
 <h1 id="clubTitle">在庫管理</h1>
+
+<!-- 検索ボックス -->
+<input
+  type="text"
+  id="searchInput"
+  class="search-box"
+  placeholder="商品名で検索"
+  oninput="filterItems()"
+/>
 
 <div style="margin-bottom: 10px;">
   <button class="green-button" onclick="showAll()">すべて表示</button>
@@ -93,9 +122,10 @@
 <input type="text" id="newName" placeholder="商品名" />
 <input type="number" id="newQty" placeholder="個数" min="0" />
 <input type="number" id="newRequiredQty" placeholder="必要個数" min="0" />
-<button class="blue-button" onclick="addItem()">追加</button>
+<button class="green-button" onclick="addItem()">追加</button>
 
 <script>
+  // クエリから部活名取得
   const urlParams = new URLSearchParams(window.location.search);
   const clubName = urlParams.get("club") || "default";
   const STORAGE_KEY = `inventory_${clubName}`;
@@ -110,7 +140,7 @@
     trackandfield: "陸上部",
     Kendo: "剣道部",
     brassband: "吹奏楽部",
-    manufacturingdepartment: "モノづくり部"
+    manufacturingdepartment: "モノづくり部",
   };
 
   document.getElementById("clubTitle").textContent = `${clubTitleMap[clubName] || "在庫管理"} 用 在庫管理`;
@@ -136,12 +166,7 @@
 
   function logHistory(action, itemName, amount = null) {
     const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    history.push({
-      timestamp: new Date().toLocaleString(),
-      action,
-      item: itemName,
-      amount
-    });
+    history.push({ timestamp: new Date().toLocaleString(), action, item: itemName, amount });
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   }
 
@@ -155,46 +180,67 @@
         <td>${item.name}</td>
         <td class="${shortageClass}">${item.qty}</td>
         <td>
-          <input type="number" id="required_${i}" value="${item.requiredQty}" min="0" />
-          <button class="yellow-button" onclick="updateRequiredQty(${i})">更新</button>
+          <input type="number" id="required_${i}" value="${item.requiredQty}" min="0" style="width:70px;" />
+          <button class="update-button" onclick="updateRequiredQty(${i})">更新</button>
         </td>
         <td>
           <input type="number" id="in_${i}" min="0" value="0" />
-          <button class="green-button" onclick="addStock(${i})">入荷</button>
+          <button class="add-button" onclick="addStock(${i})">入荷</button>
         </td>
         <td>
           <input type="number" id="out_${i}" min="0" value="0" />
-          <button class="red-button" onclick="consumeStock(${i})">消費</button>
+          <button class="consume-button" onclick="consumeStock(${i})">消費</button>
         </td>
         <td>
-          <button class="gray-button" onclick="removeItem(${i})">削除</button>
+          <button class="remove-button" onclick="removeItem(${i})">削除</button>
         </td>
       `;
       tbody.appendChild(tr);
     });
-
-    const shortageBtn = document.getElementById("shortageBtn");
-    const anyShortage = items.some(item => item.qty < item.requiredQty);
-    shortageBtn.disabled = !anyShortage;
-    shortageBtn.style.opacity = anyShortage ? "1" : "0.5";
-
     saveItems();
+    updateShortageBtn();
+  }
+
+  // 不足ボタンの無効化切り替え
+  function updateShortageBtn() {
+    const btn = document.getElementById("shortageBtn");
+    const hasShortage = items.some(item => item.qty < item.requiredQty);
+    if (hasShortage) {
+      btn.classList.remove("disabled");
+      btn.disabled = false;
+    } else {
+      btn.classList.add("disabled");
+      btn.disabled = true;
+    }
   }
 
   function addItem() {
-    const name = document.getElementById("newName").value.trim();
-    const qty = parseInt(document.getElementById("newQty").value);
-    const requiredQty = parseInt(document.getElementById("newRequiredQty").value);
+    const nameInput = document.getElementById("newName");
+    const qtyInput = document.getElementById("newQty");
+    const requiredInput = document.getElementById("newRequiredQty");
+    const name = nameInput.value.trim();
+    const qty = parseInt(qtyInput.value);
+    const requiredQty = parseInt(requiredInput.value);
+
     if (!name || isNaN(qty) || isNaN(requiredQty)) {
       alert("正しく入力してください");
       return;
     }
+
+    // 既にある商品名チェック（大文字小文字区別なし）
+    const exists = items.some(item => item.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      alert("その商品名は既に存在します");
+      return;
+    }
+
     items.push({ name, qty, requiredQty });
     logHistory("追加", name, qty);
     render();
-    document.getElementById("newName").value = "";
-    document.getElementById("newQty").value = "";
-    document.getElementById("newRequiredQty").value = "";
+    nameInput.value = "";
+    qtyInput.value = "";
+    requiredInput.value = "";
+    filterItems(); // 検索状態があれば反映
   }
 
   function updateRequiredQty(index) {
@@ -202,8 +248,9 @@
     const val = parseInt(input.value);
     if (!isNaN(val) && val >= 0) {
       items[index].requiredQty = val;
-      logHistory("必要数更新", items[index].name, val);
+      logHistory("更新", items[index].name, val);
       render();
+      filterItems();
     }
   }
 
@@ -215,6 +262,7 @@
       logHistory("入荷", items[index].name, val);
       input.value = 0;
       render();
+      filterItems();
     }
   }
 
@@ -226,6 +274,7 @@
       logHistory("消費", items[index].name, val);
       input.value = 0;
       render();
+      filterItems();
     }
   }
 
@@ -234,16 +283,28 @@
       logHistory("削除", items[index].name);
       items.splice(index, 1);
       render();
+      filterItems();
     }
   }
 
   function showShortage() {
-    const filtered = items.filter(item => item.qty < item.requiredQty);
+    const filtered = items.filter((item) => item.qty < item.requiredQty);
     render(filtered);
   }
 
   function showAll() {
     render();
+  }
+
+  // 検索機能
+  function filterItems() {
+    const query = document.getElementById("searchInput").value.trim().toLowerCase();
+    if (!query) {
+      render();
+      return;
+    }
+    const filtered = items.filter((item) => item.name.toLowerCase().includes(query));
+    render(filtered);
   }
 
   loadItems();
